@@ -17,7 +17,9 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Definindo a arquitetura do modelo (ajuste conforme necessário)
+# Criar pasta de uploads se não existir
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 class DenseNetModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -31,22 +33,22 @@ class DenseNetModel(nn.Module):
         x = self.fc(x)
         return x
 
-# Carregando o modelo
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = DenseNetModel().to(device)
 model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
 model.eval()
-
+  
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def preprocessar_imagem(imagem):
     imagem = imagem.convert('L')
     imagem = imagem.resize((96, 96))
-    imagem = np.array(imagem) / 255.0
-    imagem = torch.from_numpy(imagem).float()
-    imagem = imagem.unsqueeze(0).unsqueeze(0)  # Adiciona dimensões de batch e canal
-    return imagem.to(device)
+    imagem = np.array(imagem, dtype=np.float32) / 255.0
+    imagem = np.expand_dims(imagem, axis=0)  # (1, 96, 96)
+    imagem = np.expand_dims(imagem, axis=0)  # (1, 1, 96, 96)
+    tensor = torch.from_numpy(imagem).to(device)
+    return tensor
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -67,16 +69,14 @@ def detectar_pontos():
             return jsonify({'erro': 'Tipo de arquivo não permitido'}), 400
 
         imagem = Image.open(io.BytesIO(arquivo.read()))
-        imagem_processada = preprocessar_imagem(imagem)
-        
+        tensor = preprocessar_imagem(imagem)
+
         with torch.no_grad():
-            pontos = model(imagem_processada)
-            pontos = pontos.cpu().numpy().flatten()
-            print(pontos.tolist())
-        
-        # Formatar a resposta
+            saida = model(tensor)
+            pontos = saida.cpu().numpy().flatten().tolist()
+
         resultado = {
-            'pontos': pontos.tolist(),
+            'pontos': pontos, 
             'dimensoes': imagem.size,
             'mensagem': 'Detecção realizada com sucesso!'
         }
@@ -88,4 +88,4 @@ def detectar_pontos():
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True) 
+    app.run(host='0.0.0.0', port=port, debug=True)
