@@ -115,7 +115,6 @@ function App() {
       const blob = await response.blob();
       formData.append('file', blob, 'image.jpg');
 
-      // IMPORTANTE: Substitua pelo seu endpoint de API real
       const result = await axios.post('http://localhost:8000/predict', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',

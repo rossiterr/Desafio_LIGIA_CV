@@ -9,10 +9,10 @@ projeto/
 ├── backend/           # Fast API
 │   ├── main.py        # Script do Servidor
 │   └── requirements.txt
-└── frontend/         # Aplicação em react
-    ├── src/        # Pasta fonte do front end
-        └── App.tsx # Página da aplicação
-    └── package.json  # Dependências do frontend
+└── frontend/          # Aplicação em react
+    ├── src/           # Pasta fonte do front end
+    │   └── App.tsx    # Página da aplicação
+    └── package.json   # Dependências do frontend
 ```
 
 ## Requisitos
