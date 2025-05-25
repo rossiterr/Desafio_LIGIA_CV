@@ -1,76 +1,121 @@
-# Detector de Pontos Faciais
+# Detecção de Pontos Faciais
 
-Este projeto é uma aplicação web que permite detectar pontos faciais em imagens usando um modelo de deep learning.
+Este projeto é uma aplicação web que utiliza um modelo de deep learning para detectar pontos faciais em imagens. A aplicação consiste em um frontend em React com TypeScript e um backend em Python usando FastAPI.
 
 ## Estrutura do Projeto
 
 ```
-projeto/
-├── backend/           # API Flask
-│   ├── app.py        # Servidor Flask
-│   └── requirements.txt
-└── frontend/         # Aplicação Next.js
-    ├── pages/        # Páginas da aplicação
-    └── package.json  # Dependências do frontend
+.
+├── frontend/           # Aplicação React
+├── backend/           # API FastAPI
+│   └── models/        # Modelos treinados
+└── AI/               # Notebooks e código de treinamento
 ```
 
 ## Requisitos
 
-- Python 3.8+
+### Frontend
 - Node.js 14+
-- npm ou yarn
+- npm 6+
+
+### Backend
+- Python 3.8+
+- PyTorch
+- FastAPI
+- Outras dependências listadas em `backend/requirements.txt`
 
 ## Instalação
 
-### Backend
+### Frontend
 
-1. Crie um ambiente virtual Python:
+1. Entre na pasta do frontend:
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
+cd frontend
 ```
 
 2. Instale as dependências:
 ```bash
-cd backend
-pip install -r requirements.txt
-```
-
-3. Inicie o servidor:
-```bash
-python app.py
-```
-
-O servidor estará rodando em `http://localhost:5000`
-
-### Frontend
-
-1. Instale as dependências:
-```bash
-cd frontend
 npm install
 ```
 
-2. Inicie o servidor de desenvolvimento:
+3. Inicie o servidor de desenvolvimento:
 ```bash
-npm run dev
+npm start
 ```
 
-A aplicação estará disponível em `http://localhost:3000`
+O frontend estará disponível em `http://localhost:3000`
+
+### Backend
+
+1. Entre na pasta do backend:
+```bash
+cd backend
+```
+
+2. Crie e ative um ambiente virtual:
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+.\venv\Scripts\activate   # Windows
+```
+
+3. Instale as dependências:
+```bash
+pip install -r requirements.txt
+```
+
+4. Inicie o servidor:
+```bash
+python main.py
+```
+
+O backend estará disponível em `http://localhost:8000`
 
 ## Uso
 
 1. Acesse a aplicação em `http://localhost:3000`
-2. Clique no botão "Upload de Imagem"
-3. Selecione uma imagem contendo um rosto
-4. Aguarde o processamento
-5. Visualize os pontos faciais detectados
+2. Clique em "Selecionar Imagem" para fazer upload de uma imagem
+3. Clique em "Detectar Pontos" para processar a imagem
+4. Os pontos faciais serão exibidos sobrepostos à imagem
+
+## API Endpoints
+
+### POST /predict
+Recebe uma imagem e retorna as coordenadas dos pontos faciais detectados.
+
+**Request:**
+- Content-Type: multipart/form-data
+- Body: file (imagem)
+
+**Response:**
+```json
+{
+  "keypoints": [x1, y1, x2, y2, ...]  // 30 valores (15 pares de coordenadas)
+}
+```
+
+## Modelo
+
+O modelo utilizado é baseado em MobileNetV3, treinado para detectar 30 pontos faciais (15 pares de coordenadas x,y). O modelo recebe imagens em escala de cinza (1 canal) e retorna as coordenadas dos pontos faciais.
+
+## Tecnologias Utilizadas
+
+- Frontend:
+  - React
+  - TypeScript
+  - Material-UI
+  - Axios
+
+- Backend:
+  - Flask
+  - PyTorch
+  - EfficientNetV2
+  - OpenCV
 
 ## Desenvolvimento
 
 - O backend está em Flask e fornece uma API REST
-- O frontend está em Next.js com Material-UI
+- O frontend está em React com Material-UI
 - O modelo de deep learning será integrado ao backend
 
 ## Próximos Passos
