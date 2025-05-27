@@ -30,18 +30,19 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isWebcamStarted, setIsWebcamStarted] = useState<boolean>(false);
+  const [isRealTimeDetection, setIsRealTimeDetection] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null); // Ref para a tela de exibição
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const realTimeIntervalRef = useRef<number | null>(null);
 
-  // Função para iniciar a webcam
   const startWebcam = useCallback(async () => {
     if (videoRef.current) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         videoRef.current.srcObject = stream;
         setIsWebcamStarted(true);
-        setError(null); // Limpar erros anteriores
+        setError(null);
       } catch (err) {
         console.error('Erro ao aceder à webcam:', err);
         setError('Não foi possível aceder à webcam. Verifique as permissões e tente novamente.');
@@ -50,24 +51,23 @@ function App() {
     }
   }, []);
 
-  // Função para parar a webcam
   const stopWebcam = useCallback(() => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
       videoRef.current.srcObject = null;
       setIsWebcamStarted(false);
+      stopRealTimeDetection();
     }
   }, []);
 
-  // Efeito para gerir o estado da webcam
   useEffect(() => {
     return () => {
       stopWebcam();
     };
   }, [stopWebcam]);
 
-  const handleCapture = () => {
+  const captureFrame = useCallback(() => {
     const video = videoRef.current;
     const tempCanvas = document.createElement('canvas'); 
     if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -94,24 +94,27 @@ function App() {
         }
         
         ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
-        const dataUrl = tempCanvas.toDataURL('image/jpeg');
-        setSelectedImage(dataUrl);
-        setKeypoints([]); 
-        setError(null);
+        return tempCanvas.toDataURL('image/jpeg');
       }
+    }
+    return null;
+  }, []);
+
+  const handleCapture = () => {
+    const dataUrl = captureFrame();
+    if (dataUrl) {
+      setSelectedImage(dataUrl);
+      setKeypoints([]);
+      setError(null);
     } else {
       setError("Webcam não pronta ou nenhum stream de vídeo disponível para captura.");
     }
   };
 
-  const handlePredict = async () => {
-    if (!selectedImage) return;
-
-    setLoading(true);
-    setError(null);
+  const processImage = async (imageData: string) => {
     try {
       const formData = new FormData();
-      const response = await fetch(selectedImage);
+      const response = await fetch(imageData);
       const blob = await response.blob();
       formData.append('file', blob, 'image.jpg');
 
@@ -124,9 +127,7 @@ function App() {
       const points = result.data.keypoints;
       if (!points || points.length % 2 !== 0) {
         console.error('Dados de keypoints inválidos:', points);
-        setError('Recebidos dados de keypoints inválidos do servidor.');
-        setKeypoints([]);
-        return;
+        return null;
       }
       
       const keypointsArray: Keypoint[] = [];
@@ -136,15 +137,72 @@ function App() {
           y: points[i + 1]
         });
       }
-      setKeypoints(keypointsArray);
+      return keypointsArray;
+    } catch (err) {
+      console.error('Erro durante a predição:', err);
+      return null;
+    }
+  };
+
+  const handlePredict = async () => {
+    if (!selectedImage) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const keypointsArray = await processImage(selectedImage);
+      if (keypointsArray) {
+        setKeypoints(keypointsArray);
+      } else {
+        setError('Falha ao obter a predição. O servidor pode estar em baixo ou ocorreu um erro.');
+        setKeypoints([]);
+      }
     } catch (err) {
       console.error('Erro durante a predição:', err);
       setError('Falha ao obter a predição. O servidor pode estar em baixo ou ocorreu um erro.');
-      setKeypoints([]); 
+      setKeypoints([]);
     } finally {
       setLoading(false);
     }
   };
+
+  const startRealTimeDetection = useCallback(() => {
+    if (!isWebcamStarted) return;
+    
+    setIsRealTimeDetection(true);
+    
+    const processFrame = async () => {
+      if (!isWebcamStarted) return;
+      
+      const frameData = captureFrame();
+      if (frameData) {
+        setSelectedImage(frameData);
+        const keypointsArray = await processImage(frameData);
+        if (keypointsArray) {
+          setKeypoints(keypointsArray);
+        }
+      }
+    };
+    
+    processFrame();
+    realTimeIntervalRef.current = window.setInterval(processFrame, 50);
+  }, [isWebcamStarted, captureFrame]);
+
+  const stopRealTimeDetection = useCallback(() => {
+    if (realTimeIntervalRef.current) {
+      clearInterval(realTimeIntervalRef.current);
+      realTimeIntervalRef.current = null;
+    }
+    setIsRealTimeDetection(false);
+  }, []);
+
+  const toggleRealTimeDetection = useCallback(() => {
+    if (isRealTimeDetection) {
+      stopRealTimeDetection();
+    } else {
+      startRealTimeDetection();
+    }
+  }, [isRealTimeDetection, startRealTimeDetection, stopRealTimeDetection]);
 
   const drawImage = useCallback((ctx: CanvasRenderingContext2D, image: HTMLImageElement) => {
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); 
@@ -159,8 +217,8 @@ function App() {
     ctx.lineWidth = 1;
 
     keypoints.forEach((point) => {
-      const kx = point.x * (CANVAS_WIDTH / 100); 
-      const ky = point.y * (CANVAS_HEIGHT / 100);
+      const kx = point.x; 
+      const ky = point.y;
 
       ctx.beginPath();
       ctx.arc(kx, ky, 4, 0, 2 * Math.PI); 
@@ -205,6 +263,7 @@ function App() {
     setSelectedImage(null);
     setKeypoints([]);
     setError(null);
+    stopRealTimeDetection();
   };
 
   return (
@@ -223,7 +282,6 @@ function App() {
           </Alert>
         )}
 
-        {/* Usando Box com Flexbox para layout de coluna */}
         <Box
           sx={{
             display: 'flex',
@@ -232,7 +290,6 @@ function App() {
             gap: theme => theme.spacing(4), 
           }}
         >
-          {/* Secção da Webcam */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%' }}>
               <Typography variant="h6" gutterBottom component="h2">Feed da Webcam</Typography>
@@ -293,7 +350,7 @@ function App() {
                   variant="contained"
                   startIcon={<PhotoCameraIcon />}
                   onClick={handleCapture}
-                  disabled={!isWebcamStarted || loading}
+                  disabled={!isWebcamStarted || loading || isRealTimeDetection}
                 >
                   Capturar Foto
                 </Button>
@@ -301,7 +358,6 @@ function App() {
             </Paper>
           </Box>
 
-          {/* Secção da Imagem Capturada e Predição */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%' }}>
               <Typography variant="h6" gutterBottom component="h2">Imagem Capturada e Pontos Chave</Typography>
@@ -330,13 +386,23 @@ function App() {
               <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
                 <Button
                   variant="contained"
+                  color={isRealTimeDetection ? "error" : "primary"}
+                  startIcon={<PlayArrowIcon />}
+                  onClick={toggleRealTimeDetection}
+                  disabled={!isWebcamStarted || loading}
+                  sx={{ minWidth: '160px' }}
+                >
+                  {loading ? <CircularProgress size={24} color="inherit" /> : 
+                    isRealTimeDetection ? 'Parar Deteção' : 'Deteção em Tempo Real'}
+                </Button>
+                <Button
+                  variant="contained"
                   color="primary"
                   startIcon={<PlayArrowIcon />}
                   onClick={handlePredict}
-                  disabled={!selectedImage || loading}
-                  sx={{ minWidth: '160px' }}
+                  disabled={!selectedImage || loading || isRealTimeDetection}
                 >
-                  {loading ? <CircularProgress size={24} color="inherit" /> : 'Detetar Pontos'}
+                  Detetar Pontos
                 </Button>
                 <Button
                   variant="outlined"
